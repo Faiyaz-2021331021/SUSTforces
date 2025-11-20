@@ -4,18 +4,24 @@ import pool from "../config/db.js";
 import dotenv from "dotenv";
 dotenv.config();
 
+
+///Register USER
 export const registerUser = async (req, res) => {
-    const { username, email, password } = req.body;
+    const { username, real_name, email, password } = req.body;
+
+    if(!username || !email || !password || !real_name){
+        return res.status(400).json({message:"Please fillup all fields"});
+    }
 
     try {
         const hashed = await bcrypt.hash(password, 10);
 
         const result = await pool.query(
-            "INSERT INTO users (username, email, password_hash) VALUES ($1, $2, $3) RETURNING id, username, email",
-            [username, email, hashed]
+            "INSERT INTO users (username, real_name, email, password_hash) VALUES ($1,$2,$3,$4) RETURNING id, username, real_name, email",
+            [username,real_name,email, hashed]
         );
 
-        res.json({
+        res.status(201).json({
             success: true,
             user: result.rows[0],
         });
@@ -25,8 +31,12 @@ export const registerUser = async (req, res) => {
     }
 };
 
+///Login
 export const loginUser = async (req, res) => {
     const { email, password } = req.body;
+
+    if (!email || !password)
+        return res.status(400).json({ message: "Email and password required" });
 
     try {
         const result = await pool.query("SELECT * FROM users WHERE email=$1", [email]);
@@ -37,10 +47,9 @@ export const loginUser = async (req, res) => {
 
         const user = result.rows[0];
         const match = await bcrypt.compare(password, user.password_hash);
+        if (!match) return res.status(401).json({ message: "Invalid password" });
 
-        if (!match) {
-            return res.status(400).json({ error: "Invalid password" });
-        }
+        ///Create Token
 
         const token = jwt.sign(
             { id: user.id, username: user.username },
